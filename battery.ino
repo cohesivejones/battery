@@ -1,4 +1,4 @@
-
+#include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include "config.h"
@@ -21,28 +21,40 @@ void setup()
 
 void loop()
 {
-  float percentage = analogRead(A13) / PIN_RESOLUTION;
-  Serial.printf("DEBUG: Battery Voltage is %f V\n", percentage * VOLTAGE_DIVIDED * 3.3 * 1.1);
-  while (!client.publish(BATTERY_STATUS_QUEUE, String(percentage * VOLTAGE_DIVIDED * 3.3 * 1.1).c_str()))
+  const int capacity = JSON_OBJECT_SIZE(2);
+  StaticJsonDocument<capacity> doc;
+  doc["voltage"] = voltage();
+  doc["millis"] = millis();
+  while (!client.publish(BATTERY_STATUS_QUEUE, doc.as<String>().c_str()))
   {
+    wifiConnect();
     mqttConnect();
   }
-  delay(ONE_MINUTE * 5);
+  Serial.printf("DEBUG: Battery Voltage is %s\n", doc.as<String>().c_str());
+  delay(ONE_MINUTE);
+}
+
+float voltage()
+{
+  float percentage = analogRead(A13) / PIN_RESOLUTION;
+  return (percentage * VOLTAGE_DIVIDED * 3.3 * 1.1);
 }
 
 void wifiConnect()
 {
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  Serial.println("Connecting");
-  while (WiFi.status() != WL_CONNECTED)
+  if (WiFi.status() != WL_CONNECTED)
   {
-    delay(500);
-    Serial.print(".");
-  }
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    Serial.println("Connecting");
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      delay(500);
+      Serial.print(".");
+    }
 
-  Serial.print("Connected, IP address: ");
-  Serial.println(WiFi.localIP());
+    Serial.print("Connected, IP address: ");
+    Serial.println(WiFi.localIP());
+  }
 }
 
 void mqttConnect()
